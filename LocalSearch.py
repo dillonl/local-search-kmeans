@@ -13,26 +13,17 @@ def reduceData(data, numOfRows):
 
 # we'll play with this function, right now it just randomly picks 20 centers, SAD
 def getCandidateCenters(idx,j,C):
-    d = np.random.randint(dim, size=1)
-    #C = np.random.randint(data.shape[0], size=20)
-    #print(np.shape(data))
-    #print(np.median(data[:,0]))
+    d = np.random.randint(dim, size=1) # stores the random dimension on which to segment for this call
     m = np.median(data[:,0])
-    #print(m)
-    #print(j)
-    size = np.shape(data)
-    #print(size)
-    #print("idx",idx)
+
     less = [x for x in idx if data[x,d] < m]
     more = [x for x in idx if data[x,d] > m]
-    #print(type(idx))
+
     if j < 0 :
-        return np.random.randint(data.shape[0], size=1)
+        return np.random.randint(data.shape[0], size=1) # j is the countdown to the base case
     else:
-        return np.append(C,[getCandidateCenters(less,j-1,C),getCandidateCenters(more,j-1,C)])
-    #print(idx)
-    #print(data[idx,0])
-    #return C # just need the index of the cadidate centers, now row
+        return np.append(C,[getCandidateCenters(less,j-1,C),getCandidateCenters(more,j-1,C)]) #recursive call to both "sides" of median
+
 
 def initialCenters(k, C):
     idx = np.random.choice(C, size=k)
@@ -88,7 +79,7 @@ data = reduceData(data, 100) # sample N rows from the data
 dim = data.shape[1] 
 
 C = getCandidateCenters(range(data.shape[0]),np.log2(j),C) # pick candidate centers
-C = map(int, C)
+C = map(int, C) # for some reason it was coming back as float64, we need ints so we can index on these
 S, C = initialCenters(k, C) # pick k centers from the candidate centers
 O = getOptimalCenters(S, C, data)
 
