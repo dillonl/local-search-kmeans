@@ -13,6 +13,7 @@ def reduceData(data, numOfRows):
 
 # we'll play with this function, right now it just randomly picks 20 centers, SAD
 def getCandidateCenters(idx,j,C):
+    d = np.random.randint(dim, size=1)
     #C = np.random.randint(data.shape[0], size=20)
     #print(np.shape(data))
     #print(np.median(data[:,0]))
@@ -22,8 +23,8 @@ def getCandidateCenters(idx,j,C):
     size = np.shape(data)
     #print(size)
     #print("idx",idx)
-    less = [x for x in idx if data[x,0] < m]
-    more = [x for x in idx if data[x,0] > m]
+    less = [x for x in idx if data[x,d] < m]
+    more = [x for x in idx if data[x,d] > m]
     #print(type(idx))
     if j < 0 :
         return np.random.randint(data.shape[0], size=1)
@@ -69,22 +70,26 @@ def getOptimalCenters(S, C, data):
             tmpDist = calculateDistortion(tmpS, data)
             if tmpDist < currentDist:
                 currentDist = tmpDist
+                print currentDist
                 best_s_idx = j
         if best_s_idx > -1:
             tmpRow = tmpS[i]
             tmpS[i] = tmpC[best_s_idx]
             tmpC[best_s_idx] = tmpRow
-    print(currentDist)
     return tmpS, tmpC
 
 print "Start time ...",time.clock(),"s"
 j = 20 # candidate set size
 k = 5 # the number of centers to pick
 C = [] # initial candidate centers set
+dim = 0 # global, stores number of dimensions in the data
 data = loadData('data/data.csv') # load data from csv file
 data = reduceData(data, 100) # sample N rows from the data
+dim = data.shape[1] 
+
 C = getCandidateCenters(range(data.shape[0]),np.log2(j),C) # pick candidate centers
 C = map(int, C)
 S, C = initialCenters(k, C) # pick k centers from the candidate centers
 O = getOptimalCenters(S, C, data)
+
 print "End time ...",time.clock(),"s"
