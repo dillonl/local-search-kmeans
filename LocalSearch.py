@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import time
 
 def loadData(csvPath):
     data = pd.read_csv(csvPath)
@@ -11,12 +12,29 @@ def reduceData(data, numOfRows):
     return d
 
 # we'll play with this function, right now it just randomly picks 20 centers, SAD
-def getCandidateCenters(data):
-    idx = np.random.randint(data.shape[0], size=20)
-    return idx # we only need to return the index, not entire row
+def getCandidateCenters(idx,j,C):
+    #C = np.random.randint(data.shape[0], size=20)
+    #print(np.shape(data))
+    #print(np.median(data[:,0]))
+    m = np.median(data[:,0])
+    #print(m)
+    #print(j)
+    size = np.shape(data)
+    #print(size)
+    #print("idx",idx)
+    less = [x for x in idx if data[x,0] < m]
+    more = [x for x in idx if data[x,0] > m]
+    #print(type(idx))
+    if j < 0 :
+        return np.random.randint(data.shape[0], size=1)
+    else:
+        return np.append(C,[getCandidateCenters(less,j-1,C),getCandidateCenters(more,j-1,C)])
+    #print(idx)
+    #print(data[idx,0])
+    #return C # just need the index of the cadidate centers, now row
 
 def initialCenters(k, C):
-    idx = np.random.choice(C, size=k) # choose k candidates from C, not data 
+    idx = np.random.choice(C, size=k)
     shadowIdx = [x for x in range(0,data.shape[0])  if x not in idx]
     s = data[idx,:] # pick centers from candidate set
     c = data[shadowIdx,:] # remove s from candidate set
@@ -59,9 +77,14 @@ def getOptimalCenters(S, C, data):
     print(currentDist)
     return tmpS, tmpC
 
+print "Start time ...",time.clock(),"s"
+j = 20 # candidate set size
 k = 5 # the number of centers to pick
+C = [] # initial candidate centers set
 data = loadData('data/data.csv') # load data from csv file
-data = reduceData(data, 1000) # sample N rows from the data
-C = getCandidateCenters(data) # pick candidate centers
+data = reduceData(data, 100) # sample N rows from the data
+C = getCandidateCenters(range(data.shape[0]),np.log2(j),C) # pick candidate centers
+C = map(int, C)
 S, C = initialCenters(k, C) # pick k centers from the candidate centers
 O = getOptimalCenters(S, C, data)
+print "End time ...",time.clock(),"s"
