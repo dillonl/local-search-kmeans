@@ -16,7 +16,7 @@ def getCandidateCenters(data):
     return idx # we only need to return the index, not entire row
 
 def initialCenters(k, C):
-    idx = np.random.choice(C, size=k) // choose k candidates from C, not data 
+    idx = np.random.choice(C, size=k) # choose k candidates from C, not data 
     shadowIdx = [x for x in range(0,data.shape[0])  if x not in idx]
     s = data[idx,:] # pick centers from candidate set
     c = data[shadowIdx,:] # remove s from candidate set
