@@ -13,10 +13,10 @@ def reduceData(data, numOfRows):
 # we'll play with this function, right now it just randomly picks 20 centers, SAD
 def getCandidateCenters(data):
     idx = np.random.randint(data.shape[0], size=20)
-    d = data[idx,:]
+    return idx # we only need to return the index, not entire row
 
 def initialCenters(k, C):
-    idx = np.random.randint(data.shape[0], size=7)
+    idx = np.random.choice(C, size=k) // choose k candidates from C, not data 
     shadowIdx = [x for x in range(0,data.shape[0])  if x not in idx]
     s = data[idx,:] # pick centers from candidate set
     c = data[shadowIdx,:] # remove s from candidate set
