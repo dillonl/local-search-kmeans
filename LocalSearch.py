@@ -1,5 +1,18 @@
+import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from sklearn.decomposition import PCA
+from sklearn import datasets
+
+def plotData(X, y):
+    pca = PCA(2)  # project from 64 to 2 dimensions
+    projected = pca.fit_transform(X)
+    plt.scatter(projected[:, 0], projected[:, 1], edgecolor='none', alpha=0.5, c=y, cmap=plt.cm.get_cmap('spectral', 10))
+    plt.legend(y, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
+    # plt.scatter(projected[:, 0], projected[:, 1], edgecolor='none', alpha=0.5)
+    plt.xlabel('component 1')
+    plt.ylabel('component 2')
+    plt.show()
 
 def loadData(csvPath):
     data = pd.read_csv(csvPath)
@@ -8,10 +21,12 @@ def loadData(csvPath):
 def reduceData(data, numOfRows):
     idx = np.random.randint(data.shape[0], size=numOfRows)
     d = data[idx,:]
-    return d
+    c = [row[len(data[0]) - 1] for row in data]
+    d = np.delete(d, -1, axis=1)
+    return d, c
 
 # we'll play with this function, right now it just randomly picks 20 centers, SAD
-def getCandidateCenters(data):
+def getCandidateCenters(k, data):
     idx = np.random.randint(data.shape[0], size=20)
     return idx # we only need to return the index, not entire row
 
@@ -60,8 +75,13 @@ def getOptimalCenters(S, C, data):
     return tmpS, tmpC
 
 k = 5 # the number of centers to pick
-data = loadData('data/data.csv') # load data from csv file
-data = reduceData(data, 1000) # sample N rows from the data
-C = getCandidateCenters(data) # pick candidate centers
-S, C = initialCenters(k, C) # pick k centers from the candidate centers
-O = getOptimalCenters(S, C, data)
+# data = loadData('data/data.csv') # load data from csv file
+dataset = datasets.load_digits()
+# clusterIDs = datasets.load_digits().target_names
+X = dataset['data']
+y = dataset['target']
+# data, clusterIDs = reduceData(data, n) # sample N rows from the data
+# C = getCandidateCenters(k, data) # pick candidate centers
+# S, C = initialCenters(k, C) # pick k centers from the candidate centers
+# O = getOptimalCenters(S, C, data)
+plotData(X, y)
