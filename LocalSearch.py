@@ -1,21 +1,36 @@
 import sys, os
+import math
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn import datasets
+from scipy.spatial import distance
+from random import randint
+import random
 
-def plotData(X, y, k, filename):
-    # pca = PCA(2)  # project from 64 to 2 dimensions
-    # projected = pca.fit_transform(X)
-    colors = ["green", "blue", 'red', "black", 'yellow', 'brown', 'violet', 'orange', 'darkgreen', 'magenta']
-    c = []
-    for i in y:
-        c.append(colors[i])
-    # plt.scatter(projected[:, 0], projected[:, 1], edgecolor='none', alpha=0.7, c=c, cmap=plt.cm.get_cmap('spectral', k))
-    plt.scatter(X[:, 0], X[:,1], edgecolor='none', alpha=0.7, c=c, cmap=plt.cm.get_cmap('spectral', k))
-    # plt.legend(y, bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.)
-    # plt.scatter(projected[:, 0], projected[:, 1], edgecolor='none', alpha=0.5)
+def plotDistortionHistogram(truthDistortion, randomDistortion, badPickDistortion, minMaxDistortion, label):
+    plotsDir = 'plots'
+    if not os.path.exists(plotsDir):
+        os.makedirs(plotsDir)
+
+    years = ('truth', 'random', 'bad pick', 'min-max pick')
+    visitors = (truthDistortion, randomDistortion, badPickDistortion, minMaxDistortion)
+    index = np.arange(len(visitors))
+    bar_width = 0.3
+    plt.bar(index, visitors, bar_width,  color="blue")
+    plt.xticks(index + bar_width / 2, years) # labels get centered
+
+    plt.savefig(plotsDir + '/' + label + '.png')
+    plt.clf()
+    return 0
+
+def plotData(X, y, k, filename, shouldPCA=False):
+    if shouldPCA:
+        pca = PCA(2)  # project from 64 to 2 dimensions
+        projected = pca.fit_transform(X)
+        X = projected
+    plt.scatter(X[:, 0], X[:,1], edgecolor='none', alpha=1, c=y, cmap=plt.cm.get_cmap('prism', k))
     plt.xlabel('component 1')
     plt.ylabel('component 2')
     plotsDir = 'plots'
@@ -23,7 +38,7 @@ def plotData(X, y, k, filename):
         os.makedirs(plotsDir)
 
     plt.savefig(plotsDir + '/' + filename + '.png')
-    # plt.show()
+    plt.clf()
 
 def loadData(csvPath):
     data = pd.read_csv(csvPath)
@@ -36,29 +51,74 @@ def reduceData(data, numOfRows):
     d = np.delete(d, -1, axis=1)
     return d, c
 
+def getDist(p1, p2):
+    dist = [(a - b)**2 for a, b in zip(p1, p2)]
+    dist = sum(dist)
+    return dist
+
+def getCandidateCentersSegment(idx,j,C):
+    d = np.random.randint(dim, size=1) # stores the random dimension on which to segment for this call
+    m = np.median(data[:,0])
+
+    less = [x for x in idx if data[x,d] < m]
+    more = [x for x in idx if data[x,d] > m]
+
+    if j < 0 :
+        return np.random.randint(data.shape[0], size=1) # j is the countdown to the base case
+    else:
+        return np.append(C,[getCandidateCenters(less,j-1,C),getCandidateCenters(more,j-1,C)]) #recursive call to both "sides" of median
+
+def getCandidateCentersByBadPick(k, X):
+    idx = randint(0, len(X) - 1)
+    firstPt = X[idx]
+    c = []
+    x = []
+    dists = []
+    for i, p in enumerate(X):
+        dists.append((getDist(p, firstPt), p))
+    dists = sorted(dists, key=lambda x: x[0])
+
+    for d in dists:
+        if len(c) < k:
+            c.append(d[1])
+        else:
+            x.append(d[1])
+    random.shuffle(x)
+    c = np.array(c)
+    x = np.array(x)
+    return x, c # return data and centroids
+
 def getCandidateCentersByLargestDistance(K, data):
-    idx = np.random.randint(data.shape[0], size=1)
+    idx = randint(0, len(data) - 1)
     centroidIdxs = [idx]
+    tmpC = [0] * K
+    tmpC[0] = data[idx]
+    tmp = 1
     for k in range(K - 1):
         maxMinDist = 0
         maxMinDistPointIdx = -1
         for i, pt in enumerate(data):
             minDist = 2147483647 #max int value
             for c in centroidIdxs:
-                dist = np.linalg.norm(pt-data[c]) #compute the distance
+                dist = getDist(pt, data[c])
                 if dist < minDist:
                     minDist = dist
             if minDist > maxMinDist:
                 maxMinDist = minDist
                 maxMinDistPointIdx = i
         centroidIdxs.append(maxMinDistPointIdx)
+        tmpC[tmp] = data[maxMinDistPointIdx]
+        tmp += 1
 
-    c = data[centroidIdxs,:]
-    shadowIdx = [x for x in range(0,data.shape[0])  if x not in centroidIdxs]
-    d = data[shadowIdx,:] # remove s from candidate set
-    return d, c # return data and centroids
+    tmpX = []
+    for i,x in enumerate(data):
+        if i not in centroidIdxs:
+            tmpX.append(x.copy())
+    tmpX = np.array(tmpX)
+    tmpC = np.array(tmpC)
+    return tmpX, tmpC# return data and centroids
 
-# we'll play with this function, right now it just randomly picks 20 centers, SAD
+# we'll play with this function, right now it just randomly picks k centers, SAD
 def getCandidateCentersByRandom(k, data):
     centroidIdxs = np.random.randint(data.shape[0], size=k)
     c = data[centroidIdxs,:]
@@ -66,128 +126,109 @@ def getCandidateCentersByRandom(k, data):
     d = data[shadowIdx,:] # remove s from candidate set
     return d, c # return data and centroids
 
-def initialCenters(k, C):
-    idx = np.random.choice(C, size=k) # choose k candidates from C, not data 
-    shadowIdx = [x for x in range(0,data.shape[0])  if x not in idx]
-    s = data[idx,:] # pick centers from candidate set
-    c = data[shadowIdx,:] # remove s from candidate set
-
-    return s, c
-
 # Calculates the distortion for centers S on data
-def calculateDistortion(C, data):
-    distances = {}
-    distortion = 0
+def calculateDistortion(C, X):
+    Y = closestCentroid(X, C)
+    totalDist = 0
+    for i,y in enumerate(Y):
+        c = C[y]
+        x = X[i]
+        totalDist += getDist(x, c)
+    return totalDist
 
-    for c in C: #loop over all centers
-        for i,pt in enumerate(data): # loop over all points in data
-            dist = np.linalg.norm(pt-c) #compute the distance
-            if i not in distances: # if the distance between this point and any center has not been computed then add it
-                distances[i] = dist
-            elif distances[i] > dist: # otherwise check if the distance is less than the previously computed center dist, if so overwrite the previous one
-                distances[i] = dist
-    for i in distances: # now that we know all the distances between the centers and their closes points, compute the distortion
-        distortion += distances[i]
-    return distortion
-
-def calculateDistortion1(C, X):
-    y = closestCentroid(X, C)
-    # y = assignPointsToCenters(X, C)
-
-def moveCentroids(points, closest, centroids):
-    """returns the new centroids assigned from the points closest to them"""
-    return np.array([points[closest==k].mean(axis=0) for k in range(centroids.shape[0])])
-
-def closestCentroid(points, centroids):
-    """returns an array containing the index to the nearest centroid for each point"""
-    distances = np.sqrt(((points - centroids[:, np.newaxis])**2).sum(axis=2))
+def closestCentroid(X, C):
+    distances = np.sqrt(((X - C[:, np.newaxis])**2).sum(axis=2))
     return np.argmin(distances, axis=0)
 
-def getOptimalCenters(X, C, data):
-    # move_centroids(points, closest_centroid(points, c), c)
-    print(C)
-    tmpX = X.copy()
-    tmpC = C.copy()
+def getOptimalCenters(X, C):
     currentDist = calculateDistortion(C, X)
-    for i, s in enumerate(tmpX):
-        best_s_idx = -1
-        for j, c in enumerate(tmpC):
-            tmpX[i] = c
-            tmpDist = calculateDistortion(tmpC, tmpX)
-            # print(tmpDist, currentDist)
+    print('start',currentDist)
+    for i in range(len(X)):
+        x = X[i].copy()
+        best = {}
+        for j in range(len(C)):
+            c = C[j].copy()
+            X[i] = c.copy()
+            C[j] = x.copy()
+            tmpDist = calculateDistortion(C, X)
             if tmpDist < currentDist:
                 currentDist = tmpDist
-                best_s_idx = j
-        if best_s_idx > -1:
-            # print('swapping')
-            tmpRow = tmpX[i]
-            tmpX[i] = tmpC[best_s_idx]
-            tmpC[best_s_idx] = tmpRow
-    currentDist = calculateDistortion(tmpC, tmpX)
-    print(currentDist)
-    print(tmpC)
-    return tmpX, tmpC
+                best = {'x': X.copy(), 'c': C.copy()}
+            X[i] = x.copy() # put them back, we'll change it back if it's a lower distortion
+            C[j] = c.copy()
+        if 'x' in best:
+            X = best['x']
+            C = best['c']
+    currentDist = calculateDistortion(C, X)
+    print('end',currentDist)
+    return X, C
 
-def assignPointsToClusters(X, C):
-    y = []
-    for i, x in enumerate(X):
-        smallestDist = 2147483647
-        smallestDistIdx = 0
-        for j, c in enumerate(C):
-            dist = np.linalg.norm(x-c)
-            if dist < smallestDist:
-                smallestDist = dist
-                smallestDistIdx = j
-        y.append(smallestDistIdx)
-    return y
+def plotAllData(X, y, k, label, shouldPCA=False):
+    yIdxs = closestCentroid(X, y)
+    plotData(X, yIdxs, k, label + '_points_assigned_to_centroids', shouldPCA)
 
-def plotAllData(X, y, XLD, cLD, k, label):
-    yLD = [1] * len(XLD) + [2] * len(cLD)
+    dist1 = calculateDistortion(y, X)
+
+    oX, oC = getOptimalCenters(X, y)
+    yO = closestCentroid(oX, oC)
+
+    dist2 = calculateDistortion(oC, oX)
+
+    plotData(oX, yO, k, label + '_lloyd_opt_clusters', shouldPCA)
+
+    yIdxs = [1] * len(X) + [2] * len(y)
     tmpX = []
-    for x in XLD: tmpX.append(x)
-    for c in cLD: tmpX.append(c)
-    XLD = np.array(tmpX)
-    yLD = np.array(yLD)
-    plotData(XLD, yLD, len(np.unique(yLD)), label + '_centroids_only')
+    for x in X: tmpX.append(x)
+    for c in y: tmpX.append(c)
+    X = np.array(tmpX)
+    yIdxs = np.array(yIdxs)
+    plotData(X, yIdxs, len(np.unique(yIdxs)), label + '_centroids_only', shouldPCA)
 
-    yLD = assignPointsToClusters(XLD, cLD)
-    plotData(XLD, yLD, k, label + '_points_assigned_to_centroids')
+    oY = [1] * len(oX) + [2] * len(oC)
+    tmpX = []
+    for x in oX: tmpX.append(x)
+    for c in oC: tmpX.append(c)
+    oX = np.array(tmpX)
+    oY = np.array(oY)
+    plotData(oX, oY, len(np.unique(oY)), label + '_centroids_only_after_opt', shouldPCA)
+    return dist1, dist2
 
-    oXLD, oCLD = getOptimalCenters(XLD, cLD, X)
-    yOLD = assignPointsToClusters(oXLD, oCLD)
-    plotData(oXLD, yOLD, k, label + '_lloyd_opt_clusters')
+n = 1000
+centers = np.array([[-2, -2], [1,1], [5,5], [-2,5], [3, -4]])
+k = len(centers)
+X, y = datasets.make_blobs(n_samples=n, centers=centers, n_features=2)
 
-# data = loadData('data/data.csv') # load data from csv file
-# dataset = datasets.load_digits()
-# X = dataset['data']
-# y = dataset['target']
-k = 5
-X, y = datasets.make_blobs(n_samples=100, n_features=2, centers=k)
-plotData(X, y, k, 'truth_set')
+yIdxs = closestCentroid(X.copy(), centers.copy())
+plotData(X, yIdxs, k, 'truth_set')
+
+truthDistortion = calculateDistortion(centers, X.copy())
+
+XR, cR = getCandidateCentersByRandom(k, X.copy())
+randomPickDistortions = plotAllData(XR.copy(), cR.copy(), k, 'random', False)
+
+XLD, cLD = getCandidateCentersByLargestDistance(k, X.copy())
+minMaxDistortions = plotAllData(XLD, cLD, k, 'largest_distance', False)
+
+XBP, cBP = getCandidateCentersByBadPick(k, X.copy())
+badPickDistortions = plotAllData(XBP.copy(), cBP.copy(), k, 'bad_pick', False)
+
+plotDistortionHistogram(truthDistortion, randomPickDistortions[0], badPickDistortions[0], minMaxDistortions[0], 'before_lloyds')
+plotDistortionHistogram(truthDistortion, randomPickDistortions[1], badPickDistortions[1], minMaxDistortions[1], 'after_lloyds')
+
+dataset = datasets.load_digits()
+X = dataset['data']
+y = dataset['target']
+
+plotData(X, y, k, 'digits_truth_set', True)
+
+XLD, cLD = getCandidateCentersByBadPick(k, X)
+badPickDistortions = plotAllData(XLD, cLD, k, 'digits_bad_pick', True)
+
 XR, cR = getCandidateCentersByRandom(k, X)
-plotAllData(X, y, XR, cR, k, 'random')
+randomPickDistortion = plotAllData(XR, cR, k, 'digits_random', True)
+
 XLD, cLD = getCandidateCentersByLargestDistance(k, X)
-plotAllData(X, y, XLD, cLD, k, 'largest_distance')
+minMaxDistortions = plotAllData(XLD, cLD, k, 'digits_largest_distance', True)
 
-def plotByCentersLargestDist(X, y, k):
-    XLD, cLD = getCandidateCentersByLargestDistance(k, X)
-    yLD = [1] * len(XLD) + [2] * len(cLD)
-    tmpX = []
-    for x in XLD: tmpX.append(x)
-    for c in cLD: tmpX.append(c)
-    XLD = np.array(tmpX)
-    yLD = np.array(yLD)
-    plotData(XLD, yLD, len(np.unique(yLD)), 'largest_dist_centroids')
-
-    yLD = assignPointsToClusters(XLD, cLD)
-    plotData(XLD, yLD, k, 'largest_dist_points')
-
-    oXLD, oCLD = getOptimalCenters(XLD, cLD, X)
-    yOLD = assignPointsToClusters(oXLD, oCLD)
-    plotData(oXLD, yOLD, k, 'largest_dist_opt_clusters')
-
-# data, clusterIDs = reduceData(data, n) # sample N rows from the data
-# C = getCandidateCenters(k, data) # pick candidate centers
-# S, C = initialCenters(k, C) # pick k centers from the candidate centers
-# O = getOptimalCenters(S, C, data)
-# plotData(X, y)
+plotDistortionHistogram(truthDistortion, randomPickDistortion[0], badPickDistortions[0], minMaxDistortions[0], 'digits_before_lloyds')
+plotDistortionHistogram(truthDistortion, randomPickDistortion[1], badPickDistortions[1], minMaxDistortions[1], 'digits_after_lloyds')
